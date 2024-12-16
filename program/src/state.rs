@@ -8,7 +8,7 @@ use solana_program::{
     program_error::ProgramError,
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::Pubkey,
-    sysvar::Sysvar,
+    sysvar::Sysvar,msg,
 };
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
@@ -693,6 +693,10 @@ pub struct AmmInfo {
     pub recent_epoch: u64,
     /// padding
     pub padding2: u64,
+    /// is from coolpad
+    pub is_coolpad_token: bool,
+    
+    pub burn_rate: u64,  // as a numerator per 10000
 }
 impl_loadable!(AmmInfo);
 
@@ -744,8 +748,12 @@ impl AmmInfo {
         pc_decimals: u8,
         coin_lot_size: u64,
         pc_lot_size: u64,
+        is_coolpad_token: bool,
+        swap_fee_numerator: u16,
+        coolpad_burn_ratio: u16,
     ) -> Result<(), AmmError> {
         self.fees.initialize()?;
+        self.fees.swap_fee_numerator = swap_fee_numerator as u64;
         self.state_data.initialize(open_time)?;
 
         self.status = AmmStatus::Uninitialized.into_u64();
@@ -765,6 +773,7 @@ impl AmmInfo {
                 .checked_pow(coin_decimals.try_into().unwrap())
                 .unwrap();
         }
+        msg!("coin_lot_size: {}, pc_decimals: {}, coin_decimals: {}", coin_lot_size, pc_decimals, coin_decimals);
         let temp_value_numerator = (coin_lot_size as u128)
             .checked_mul(
                 (10 as u128)
@@ -779,6 +788,7 @@ impl AmmInfo {
                     .unwrap(),
             )
             .unwrap();
+        msg!("sys_decimal_value: {}, temp_value_denominator: {}", self.sys_decimal_value, temp_value_denominator);
         if (self.sys_decimal_value as u128)
             <= temp_value_numerator
                 .checked_div(temp_value_denominator)
@@ -827,6 +837,8 @@ impl AmmInfo {
         self.padding1 = Zeroable::zeroed();
         self.recent_epoch = Clock::get().unwrap().epoch;
         self.padding2 = Zeroable::zeroed();
+        self.is_coolpad_token = is_coolpad_token;
+        self.burn_rate = coolpad_burn_ratio as u64;
 
         Ok(())
     }

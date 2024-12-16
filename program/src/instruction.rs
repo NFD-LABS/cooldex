@@ -35,6 +35,9 @@ pub struct InitializeInstruction2 {
     pub init_pc_amount: u64,
     /// init token coin amount
     pub init_coin_amount: u64,
+
+    pub fee_numerator: u16,
+    pub burn_bp: u16,
 }
 
 #[repr(C)]
@@ -387,12 +390,19 @@ impl AmmInstruction {
                 let (nonce, rest) = Self::unpack_u8(rest)?;
                 let (open_time, rest) = Self::unpack_u64(rest)?;
                 let (init_pc_amount, rest) = Self::unpack_u64(rest)?;
-                let (init_coin_amount, _reset) = Self::unpack_u64(rest)?;
+                let (init_coin_amount, rest) = Self::unpack_u64(rest)?;
+                let (fee_numerator, rest) = Self::unpack_u16(rest)?;
+                let (burn_bp, _rest) = Self::unpack_u16(rest)?;
+                if burn_bp > 10000 {
+                    return Err(ProgramError::InvalidInstructionData.into());
+                }
                 Self::Initialize2(InitializeInstruction2 {
                     nonce,
                     open_time,
                     init_pc_amount,
                     init_coin_amount,
+                    fee_numerator,
+                    burn_bp,
                 })
             }
             2 => {
@@ -656,12 +666,16 @@ impl AmmInstruction {
                 open_time,
                 init_pc_amount,
                 init_coin_amount,
+                burn_bp,
+                fee_numerator,
             }) => {
                 buf.push(1);
                 buf.push(*nonce);
                 buf.extend_from_slice(&open_time.to_le_bytes());
                 buf.extend_from_slice(&init_pc_amount.to_le_bytes());
                 buf.extend_from_slice(&init_coin_amount.to_le_bytes());
+                buf.extend_from_slice(&burn_bp.to_le_bytes());
+                buf.extend_from_slice(&fee_numerator.to_le_bytes());
             }
             Self::MonitorStep(MonitorStepInstruction {
                 plan_order_limit,
@@ -872,6 +886,8 @@ pub fn initialize2(
         open_time,
         init_pc_amount,
         init_coin_amount,
+        burn_bp: 0,
+        fee_numerator: 0,
     });
     let data = init_data.pack()?;
 

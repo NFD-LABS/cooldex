@@ -57,49 +57,23 @@ pub mod msrm_token {
     solana_program::declare_id!("MSRMcoVyrFxnSgo5uXwone5SKcGhT1KEJMFEkMEWf9L");
 }
 
-#[cfg(feature = "localnet")]
-pub mod config_feature {
-    pub mod amm_owner {
-        solana_program::declare_id!("75KWb5XcqPTgacQyNw9P5QU2HL3xpezEVcgsFCiJgTT");
-    }
-    pub mod openbook_program {
-        solana_program::declare_id!("kGeitTdTHT1WdpUScdm8yxUAirZwbnQtqrpzvAm1p98");
-    }
-    pub mod referrer_pc_wallet {
-        solana_program::declare_id!("75KWb5XcqPTgacQyNw9P5QU2HL3xpezEVcgsFCiJgTT");
-    }
-    pub mod create_pool_fee_address {
-        solana_program::declare_id!("75KWb5XcqPTgacQyNw9P5QU2HL3xpezEVcgsFCiJgTT");
-    }
+pub mod coolpad {
+    solana_program::declare_id!("rQ7a19af4EP8uG8SAHUZMyFEMX9qAjq3R5cKEfdzqbq");
 }
-#[cfg(feature = "devnet")]
-pub mod config_feature {
-    pub mod amm_owner {
-        solana_program::declare_id!("Adm29NctkKwJGaaiU8CXqdV6WDTwR81JbxV8zoxn745Y");
-    }
-    pub mod openbook_program {
-        solana_program::declare_id!("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj");
-    }
-    pub mod referrer_pc_wallet {
-        solana_program::declare_id!("4NpMfWThvJQsV9VLjUXXpn3tPv1zoQpib8wCBDc1EBzD");
-    }
-    pub mod create_pool_fee_address {
-        solana_program::declare_id!("3XMrhbv989VxAMi3DErLV9eJht1pHppW5LbKxe9fkEFR");
-    }
-}
+
 #[cfg(not(any(feature = "localnet", feature = "devnet")))]
 pub mod config_feature {
     pub mod amm_owner {
-        solana_program::declare_id!("GThUX1Atko4tqhN2NaiTazWSeFWMuiUvfFnyJyUghFMJ");
+        solana_program::declare_id!("CLYVUjoRVwbTKDxCzvL5ghLXFr2TeBhMbLt7v7LxTa5w");
     }
     pub mod openbook_program {
         solana_program::declare_id!("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX");
     }
     pub mod referrer_pc_wallet {
-        solana_program::declare_id!("FCxGKqGSVeV1d3WsmAXt45A5iQdCS6kKCeJy3EUBigMG");
+        solana_program::declare_id!("CLYVUjoRVwbTKDxCzvL5ghLXFr2TeBhMbLt7v7LxTa5w");
     }
     pub mod create_pool_fee_address {
-        solana_program::declare_id!("7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5");
+        solana_program::declare_id!("CLYVUjoRVwbTKDxCzvL5ghLXFr2TeBhMbLt7v7LxTa5w");
     }
 }
 
@@ -119,6 +93,10 @@ pub const PC_VAULT_ASSOCIATED_SEED: &'static [u8] = b"pc_vault_associated_seed";
 pub const LP_MINT_ASSOCIATED_SEED: &'static [u8] = b"lp_mint_associated_seed";
 /// Amm config seed
 pub const AMM_CONFIG_SEED: &'static [u8] = b"amm_config_account_seed";
+
+pub const COOLPAD_OWNERS_FEE_NUMERATOR: u16 = 500;
+pub const COOLPAD_OWNERS_FEE_DENOMINATOR: u16 = 10000;
+pub const COOLPAD_BURN_RATE_DENOMINATOR: u16 = 10000;
 
 pub fn get_associated_address_and_bump_seed(
     info_id: &Pubkey,
@@ -172,6 +150,20 @@ impl Processor {
         } else {
             spl_token::state::Mint::unpack(&account_info.data.borrow())
                 .map_err(|_| AmmError::ExpectedMint)
+        }
+    }
+
+    #[inline]
+    pub fn check_admins_token_account(
+        account_info: &AccountInfo,
+        program_id: &Pubkey,
+        authority: &Pubkey,
+    ) -> ProgramResult {
+        let token_account = Self::unpack_token_account(account_info, program_id)?;
+        if token_account.owner != *authority {
+            return Err(AmmError::InvalidOwner.into());
+        } else {
+            return Ok(());
         }
     }
 
@@ -876,6 +868,7 @@ impl Processor {
         if !user_wallet_info.is_signer {
             return Err(AmmError::InvalidSignAccount.into());
         }
+        let is_coolpad_deployer = coolpad::id() == *user_wallet_info.key;
         check_assert_eq!(
             *token_program_info.key,
             spl_token::id(),
@@ -911,7 +904,7 @@ impl Processor {
         }
         let amm_config = AmmConfig::load_checked(&amm_config_info, program_id)?;
         // Charge the fee to create a pool
-        if amm_config.create_pool_fee != 0 {
+        if amm_config.create_pool_fee != 0 && !is_coolpad_deployer {
             invoke(
                 &system_instruction::transfer(
                     user_wallet_info.key,
@@ -1023,6 +1016,7 @@ impl Processor {
             size_of::<serum_dex::state::OpenOrders>() + 12,
         )?;
         // init open orders account
+        /*
         Invokers::invoke_dex_init_open_orders(
             market_program_info.clone(),
             amm_open_orders_info.clone(),
@@ -1032,6 +1026,7 @@ impl Processor {
             AUTHORITY_AMM,
             init.nonce as u8,
         )?;
+        */
 
         // create user ata lp token
         Invokers::create_ata_spl_token(
@@ -1114,28 +1109,6 @@ impl Processor {
             AmmError::InvalidPCMint
         );
 
-        // load and check market
-        let market_state =
-            Market::load(market_info, &config_feature::openbook_program::id(), false)?;
-        if identity(market_state.coin_mint) != amm_coin_vault.mint.to_aligned_bytes()
-            || identity(market_state.coin_mint) != (*amm_coin_mint_info.key).to_aligned_bytes()
-        {
-            return Err(AmmError::InvalidCoinMint.into());
-        }
-        if identity(market_state.pc_mint) != amm_pc_vault.mint.to_aligned_bytes()
-            || identity(market_state.pc_mint) != (*amm_pc_mint_info.key).to_aligned_bytes()
-        {
-            return Err(AmmError::InvalidPCMint.into());
-        }
-        if market_state.pc_lot_size == 0 || market_state.coin_lot_size == 0 {
-            msg!(
-                "pc_lot_size:{}, coin_lot_size:{}",
-                identity(market_state.pc_lot_size),
-                identity(market_state.coin_lot_size)
-            );
-            return Err(AmmError::InvalidMarket.into());
-        }
-
         let lp_mint = Self::unpack_mint(&amm_lp_mint_info, spl_token_program_id)?;
         if lp_mint.supply != 0 {
             return Err(AmmError::InvalidSupply.into());
@@ -1146,6 +1119,9 @@ impl Processor {
         if lp_mint.freeze_authority.is_some() {
             return Err(AmmError::InvalidFreezeAuthority.into());
         }
+
+        let coin_lot_size = 0x4c4b400; // 1_000_000_000
+        let pc_lot_size = 0x989680; // 10_000_000
 
         let liquidity = Calculator::to_u64(
             U128::from(amm_pc_vault.amount)
@@ -1175,16 +1151,19 @@ impl Processor {
             init.open_time,
             coin_mint.decimals,
             pc_mint.decimals,
-            market_state.coin_lot_size,
-            market_state.pc_lot_size,
+            pc_lot_size,
+            coin_lot_size,
+            is_coolpad_deployer,
+            if is_coolpad_deployer { init.fee_numerator } else { 0 },
+            if is_coolpad_deployer { init.burn_bp } else { 0 },
         )?;
         encode_ray_log(InitLog {
             log_type: LogType::Init.into_u8(),
             time: init.open_time,
             pc_decimals: amm.pc_decimals as u8,
             coin_decimals: amm.coin_decimals as u8,
-            pc_lot_size: market_state.pc_lot_size,
-            coin_lot_size: market_state.coin_lot_size,
+            pc_lot_size: pc_lot_size,
+            coin_lot_size: coin_lot_size,
             pc_amount: amm_pc_vault.amount,
             coin_amount: amm_coin_vault.amount,
             market: *market_info.key,
@@ -1223,6 +1202,7 @@ impl Processor {
             AmmStatus::SwapOnly.into_u64()
         };
         amm.reset_flag = AmmResetFlag::ResetYes.into_u64();
+        amm.is_coolpad_token = is_coolpad_deployer;
 
         Ok(())
     }
@@ -1621,22 +1601,22 @@ impl Processor {
 
         let market_program_info = next_account_info(account_info_iter)?;
         let market_info = next_account_info(account_info_iter)?;
-        let market_event_queue_info = next_account_info(account_info_iter)?;
-        let market_coin_vault_info = next_account_info(account_info_iter)?;
-        let market_pc_vault_info = next_account_info(account_info_iter)?;
-        let market_vault_signer = next_account_info(account_info_iter)?;
-        let mut referrer_pc_wallet = None;
-        if input_account_len == ACCOUNT_LEN + 1 {
-            referrer_pc_wallet = Some(next_account_info(account_info_iter)?);
-            let referrer_pc_token =
-                Self::unpack_token_account(&referrer_pc_wallet.unwrap(), token_program_info.key)?;
-            check_assert_eq!(
-                referrer_pc_token.owner,
-                config_feature::referrer_pc_wallet::id(),
-                "referrer_pc_owner",
-                AmmError::InvalidOwner
-            );
-        }
+        let _market_event_queue_info = next_account_info(account_info_iter)?;
+        let _market_coin_vault_info = next_account_info(account_info_iter)?;
+        let _market_pc_vault_info = next_account_info(account_info_iter)?;
+        let _market_vault_signer = next_account_info(account_info_iter)?;
+        // let mut referrer_pc_wallet = None;
+        // if input_account_len == ACCOUNT_LEN + 1 {
+        //     referrer_pc_wallet = Some(next_account_info(account_info_iter)?);
+        //     let referrer_pc_token =
+        //         Self::unpack_token_account(&referrer_pc_wallet.unwrap(), token_program_info.key)?;
+        //     check_assert_eq!(
+        //         referrer_pc_token.owner,
+        //         config_feature::referrer_pc_wallet::id(),
+        //         "referrer_pc_owner",
+        //         AmmError::InvalidOwner
+        //     );
+        // }
 
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
         if *amm_authority_info.key
@@ -1713,8 +1693,8 @@ impl Processor {
         let amm_pc_vault = Self::unpack_token_account(&amm_pc_vault_info, spl_token_program_id)?;
         let user_pnl_coin = Self::unpack_token_account(&user_pnl_coin_info, spl_token_program_id)?;
         let user_pnl_pc = Self::unpack_token_account(&user_pnl_pc_info, spl_token_program_id)?;
-        let mut target_orders =
-            TargetOrders::load_mut_checked(&amm_target_orders_info, program_id, amm_info.key)?;
+        // let mut target_orders =
+        //     TargetOrders::load_mut_checked(&amm_target_orders_info, program_id, amm_info.key)?;
         if amm_coin_vault.mint != amm.coin_vault_mint || user_pnl_coin.mint != amm.coin_vault_mint {
             return Err(AmmError::InvalidCoinMint.into());
         }
@@ -1722,13 +1702,13 @@ impl Processor {
             return Err(AmmError::InvalidPCMint.into());
         }
 
-        let (market_state, open_orders) = Self::load_serum_market_order(
-            market_info,
-            amm_open_orders_info,
-            amm_authority_info,
-            &amm,
-            false,
-        )?;
+        // let (market_state, open_orders) = Self::load_serum_market_order(
+        //     market_info,
+        //     amm_open_orders_info,
+        //     amm_authority_info,
+        //     &amm,
+        //     false,
+        // )?;
 
         msg!(arrform!(
             LOG_SIZE,
@@ -1738,46 +1718,46 @@ impl Processor {
         )
         .as_str());
 
-        let (mut total_pc_without_take_pnl, mut total_coin_without_take_pnl) =
-            Calculator::calc_total_without_take_pnl(
-                amm_pc_vault.amount,
-                amm_coin_vault.amount,
-                &open_orders,
-                &amm,
-                &market_state,
-                &market_event_queue_info,
-                &amm_open_orders_info,
-            )?;
-        let x1 = Calculator::normalize_decimal_v2(
-            total_pc_without_take_pnl,
-            amm.pc_decimals,
-            amm.sys_decimal_value,
-        );
-        let y1 = Calculator::normalize_decimal_v2(
-            total_coin_without_take_pnl,
-            amm.coin_decimals,
-            amm.sys_decimal_value,
-        );
-        msg!(arrform!(
-            LOG_SIZE,
-            "withdrawpnl total_pc:{}, total_pc:{}, x:{}, y:{}",
-            total_pc_without_take_pnl,
-            total_coin_without_take_pnl,
-            x1,
-            y1
-        )
-        .as_str());
+        // let (mut total_pc_without_take_pnl, mut total_coin_without_take_pnl) =
+        //     Calculator::calc_total_without_take_pnl(
+        //         amm_pc_vault.amount,
+        //         amm_coin_vault.amount,
+        //         &open_orders,
+        //         &amm,
+        //         &market_state,
+        //         &market_event_queue_info,
+        //         &amm_open_orders_info,
+        //     )?;
+        // let x1 = Calculator::normalize_decimal_v2(
+        //     total_pc_without_take_pnl,
+        //     amm.pc_decimals,
+        //     amm.sys_decimal_value,
+        // );
+        // let y1 = Calculator::normalize_decimal_v2(
+        //     total_coin_without_take_pnl,
+        //     amm.coin_decimals,
+        //     amm.sys_decimal_value,
+        // );
+        // msg!(arrform!(
+        //     LOG_SIZE,
+        //     "withdrawpnl total_pc:{}, total_pc:{}, x:{}, y:{}",
+        //     total_pc_without_take_pnl,
+        //     total_coin_without_take_pnl,
+        //     x1,
+        //     y1
+        // )
+        // .as_str());
 
         // calc and update pnl
-        let (delta_x, delta_y) = Self::calc_take_pnl(
-            &target_orders,
-            &mut amm,
-            &mut total_pc_without_take_pnl,
-            &mut total_coin_without_take_pnl,
-            x1.as_u128().into(),
-            y1.as_u128().into(),
-        )?;
-        msg!(arrform!(LOG_SIZE, "withdrawpnl total_pc:{}, total_pc:{}, delta_x:{}, delta_y:{}, need_take_coin:{}, need_take_pc:{}",total_pc_without_take_pnl, total_coin_without_take_pnl, delta_x, delta_y, amm.state_data.need_take_pnl_coin, amm.state_data.need_take_pnl_pc).as_str());
+        // let (delta_x, delta_y) = Self::calc_take_pnl(
+        //     &target_orders,
+        //     &mut amm,
+        //     &mut total_pc_without_take_pnl,
+        //     &mut total_coin_without_take_pnl,
+        //     x1.as_u128().into(),
+        //     y1.as_u128().into(),
+        // )?;
+        // msg!(arrform!(LOG_SIZE, "withdrawpnl total_pc:{}, total_pc:{}, delta_x:{}, delta_y:{}, need_take_coin:{}, need_take_pc:{}",total_pc_without_take_pnl, total_coin_without_take_pnl, delta_x, delta_y, amm.state_data.need_take_pnl_coin, amm.state_data.need_take_pnl_pc).as_str());
 
         if amm.state_data.need_take_pnl_coin <= amm_coin_vault.amount
             && amm.state_data.need_take_pnl_pc <= amm_pc_vault.amount
@@ -1805,73 +1785,10 @@ impl Processor {
             amm.state_data.need_take_pnl_coin = 0u64;
             amm.state_data.need_take_pnl_pc = 0u64;
             // update target_orders.calc_pnl_x & target_orders.calc_pnl_y
-            target_orders.calc_pnl_x = x1.checked_sub(U128::from(delta_x)).unwrap().as_u128();
-            target_orders.calc_pnl_y = y1.checked_sub(U128::from(delta_y)).unwrap().as_u128();
-        } else if amm.state_data.need_take_pnl_coin
-            <= amm_coin_vault
-                .amount
-                .checked_add(open_orders.native_coin_free)
-                .unwrap()
-            && amm.state_data.need_take_pnl_pc
-                <= amm_pc_vault
-                    .amount
-                    .checked_add(open_orders.native_pc_free)
-                    .unwrap()
-        {
-            // settle & transfer
-            Invokers::invoke_dex_settle_funds(
-                market_program_info.clone(),
-                market_info.clone(),
-                amm_open_orders_info.clone(),
-                amm_authority_info.clone(),
-                market_coin_vault_info.clone(),
-                market_pc_vault_info.clone(),
-                amm_coin_vault_info.clone(),
-                amm_pc_vault_info.clone(),
-                market_vault_signer.clone(),
-                token_program_info.clone(),
-                referrer_pc_wallet.clone(),
-                AUTHORITY_AMM,
-                amm.nonce as u8,
-            )?;
-            Invokers::token_transfer_with_authority(
-                token_program_info.clone(),
-                amm_coin_vault_info.clone(),
-                user_pnl_coin_info.clone(),
-                amm_authority_info.clone(),
-                AUTHORITY_AMM,
-                amm.nonce as u8,
-                amm.state_data.need_take_pnl_coin,
-            )?;
-            Invokers::token_transfer_with_authority(
-                token_program_info.clone(),
-                amm_pc_vault_info.clone(),
-                user_pnl_pc_info.clone(),
-                amm_authority_info.clone(),
-                AUTHORITY_AMM,
-                amm.nonce as u8,
-                amm.state_data.need_take_pnl_pc,
-            )?;
-            // clear need take pnl
-            amm.state_data.need_take_pnl_coin = 0u64;
-            amm.state_data.need_take_pnl_pc = 0u64;
-            // update target_orders.calc_pnl_x & target_orders.calc_pnl_y
-            target_orders.calc_pnl_x = x1.checked_sub(U128::from(delta_x)).unwrap().as_u128();
-            target_orders.calc_pnl_y = y1.checked_sub(U128::from(delta_y)).unwrap().as_u128();
-        } else if amm.state_data.need_take_pnl_coin
-            >= amm_coin_vault
-                .amount
-                .checked_add(open_orders.native_coin_total)
-                .unwrap()
-            || amm.state_data.need_take_pnl_pc
-                >= amm_pc_vault
-                    .amount
-                    .checked_add(open_orders.native_pc_total)
-                    .unwrap()
-        {
-            // calc error need to disable
-            amm.state = AmmState::CancelAllOrdersState.into_u64();
-            amm.status = AmmStatus::Disabled.into_u64();
+            // target_orders.calc_pnl_x = x1.checked_sub(U128::from(delta_x)).unwrap().as_u128();
+            // target_orders.calc_pnl_y = y1.checked_sub(U128::from(delta_y)).unwrap().as_u128();
+        } else {
+            return Err(AmmError::InsufficientFunds.into());
         }
         amm.recent_epoch = Clock::get()?.epoch;
 
@@ -2244,7 +2161,7 @@ impl Processor {
         accounts: &[AccountInfo],
         swap: SwapInstructionBaseIn,
     ) -> ProgramResult {
-        const ACCOUNT_LEN: usize = 17;
+        const ACCOUNT_LEN: usize = 21;
         let input_account_len = accounts.len();
         if input_account_len != ACCOUNT_LEN && input_account_len != ACCOUNT_LEN + 1 {
             return Err(AmmError::WrongAccountsNumber.into());
@@ -2264,12 +2181,7 @@ impl Processor {
         let market_program_info = next_account_info(account_info_iter)?;
 
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
-        let enable_orderbook;
-        if AmmStatus::from_u64(amm.status).orderbook_permission() {
-            enable_orderbook = true;
-        } else {
-            enable_orderbook = false;
-        }
+        let enable_orderbook = false;
         let market_info = next_account_info(account_info_iter)?;
         let market_bids_info = next_account_info(account_info_iter)?;
         let market_asks_info = next_account_info(account_info_iter)?;
@@ -2281,6 +2193,13 @@ impl Processor {
         let user_source_info = next_account_info(account_info_iter)?;
         let user_destination_info = next_account_info(account_info_iter)?;
         let user_source_owner = next_account_info(account_info_iter)?;
+        
+        let coin_mint_info = next_account_info(account_info_iter)?;
+
+        let platform_tax_wsol_account = next_account_info(account_info_iter)?;
+        let cult_contribution_wsol_account = next_account_info(account_info_iter)?;
+        let cult_contribution_token_account = next_account_info(account_info_iter)?;
+
         if !user_source_owner.is_signer {
             return Err(AmmError::InvalidSignAccount.into());
         }
@@ -2317,6 +2236,22 @@ impl Processor {
         {
             return Err(AmmError::InvalidUserToken.into());
         }
+
+        Self::check_admins_token_account(
+            platform_tax_wsol_account,
+            spl_token_program_id,
+            &config_feature::amm_owner::ID,
+        )?;
+        Self::check_admins_token_account(
+            cult_contribution_wsol_account,
+            spl_token_program_id,
+            &config_feature::amm_owner::ID,
+        )?;
+        Self::check_admins_token_account(
+            cult_contribution_token_account,
+            spl_token_program_id,
+            &config_feature::amm_owner::ID,
+        )?;
 
         let amm_coin_vault =
             Self::unpack_token_account(&amm_coin_vault_info, spl_token_program_id)?;
@@ -2422,13 +2357,61 @@ impl Processor {
             });
             return Err(AmmError::InsufficientFunds.into());
         }
-        let swap_fee = U128::from(swap.amount_in)
-            .checked_mul(amm.fees.swap_fee_numerator.into())
-            .unwrap()
-            .checked_ceil_div(amm.fees.swap_fee_denominator.into())
-            .unwrap()
-            .0;
-        let swap_in_after_deduct_fee = U128::from(swap.amount_in).checked_sub(swap_fee).unwrap();
+        let (input_token_to_hold, mut platform_tax, mut cult_wsol, mut cult_token, mut burn_token): (u64, u64, u64, u64, u64) = if amm.is_coolpad_token {
+            msg!("Coolpad fee structure: amount_in {}, swap_fee_numerator {}, swap_fee_denominator {}", swap.amount_in, amm.fees.swap_fee_numerator, amm.fees.swap_fee_denominator);
+            match swap_direction {
+                SwapDirection::Coin2PC => {
+                    // This is SELL. Input = TOKEN, Output = SOL.
+                    let taxable_amount = U128::from(swap.amount_in)
+                        .checked_mul(amm.fees.swap_fee_numerator.into())
+                        .unwrap()
+                        .checked_mul((COOLPAD_OWNERS_FEE_DENOMINATOR - COOLPAD_OWNERS_FEE_NUMERATOR).into())
+                        .unwrap()
+                        .checked_ceil_div(((COOLPAD_OWNERS_FEE_DENOMINATOR as u64) * amm.fees.swap_fee_denominator).into())
+                        .unwrap()
+                        .0;
+                    let amount_to_burn = taxable_amount
+                        .checked_mul(amm.burn_rate.into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_BURN_RATE_DENOMINATOR.into())
+                        .unwrap()
+                        .0;
+                    let cult_token = taxable_amount.checked_sub(amount_to_burn).unwrap().checked_ceil_div(2.into()).unwrap().0;
+                    ((amount_to_burn + cult_token).as_u64(), 0, 0, cult_token.as_u64(), amount_to_burn.as_u64())
+                }
+                SwapDirection::PC2Coin => {
+                    // This is BUY. Input = SOL, Output = TOKEN.
+                    let taxable_amount = U128::from(swap.amount_in)
+                        .checked_mul(amm.fees.swap_fee_numerator.into())
+                        .unwrap()
+                        .checked_ceil_div(amm.fees.swap_fee_denominator.into())
+                        .unwrap()
+                        .0;
+                    msg!("taxable_amount: {}/{} {}", amm.fees.swap_fee_numerator, amm.fees.swap_fee_denominator, taxable_amount);
+                    let platform_tax = taxable_amount
+                        .checked_mul(COOLPAD_OWNERS_FEE_NUMERATOR.into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_OWNERS_FEE_DENOMINATOR.into())
+                        .unwrap()
+                        .0;
+                    msg!("platform_tax: {}", platform_tax);
+                    let cult_wsol = taxable_amount.checked_sub(platform_tax).unwrap()
+                        .checked_mul((10000u64 - amm.burn_rate).into()).unwrap()
+                        .checked_ceil_div(20000.into()).unwrap().0;
+                    msg!("cult_wsol: {}", cult_wsol);
+                    ((platform_tax + cult_wsol).as_u64(), platform_tax.as_u64(), cult_wsol.as_u64(), 0, 0)
+                }
+            }
+        } else {
+            msg!("Non coolpad structure: amount_in {}, swap_fee_numerator {}, swap_fee_denominator {}", swap.amount_in, amm.fees.swap_fee_numerator, amm.fees.swap_fee_denominator);
+            (U128::from(swap.amount_in)
+                .checked_mul(amm.fees.swap_fee_numerator.into())
+                .unwrap()
+                .checked_ceil_div(amm.fees.swap_fee_denominator.into())
+                .unwrap()
+                .0.as_u64(), 0, 0, 0, 0)
+        };
+        let swap_in_after_deduct_fee = U128::from(swap.amount_in).checked_sub(input_token_to_hold.into()).unwrap();
         let swap_amount_out = Calculator::swap_token_amount_base_in(
             swap_in_after_deduct_fee,
             total_pc_without_take_pnl.into(),
@@ -2436,6 +2419,61 @@ impl Processor {
             swap_direction,
         )
         .as_u64();
+
+        let swap_amount_out_to_user = if amm.is_coolpad_token {
+            match swap_direction {
+                SwapDirection::Coin2PC => {
+                    // This is SELL. Input = TOKEN, Output = SOL.
+
+                    // Trying to restore the expected output amount if fees were not applied.
+                    // This is not the exact value, due some non-linearities in the fee calculation,
+                    // but it should be close enough for the purpose of the swap.
+                    let taxable_amount = U128::from(swap_amount_out)
+                        .checked_mul(swap.amount_in.into())
+                        .unwrap()
+                        .checked_mul(amm.fees.swap_fee_numerator.into())
+                        .unwrap()
+                        .checked_ceil_div(U128::from(swap_in_after_deduct_fee)
+                                              .checked_mul(amm.fees.swap_fee_denominator.into()).unwrap())
+                        .unwrap()
+                        .0.as_u64();
+                    platform_tax = U128::from(taxable_amount)
+                        .checked_mul(COOLPAD_OWNERS_FEE_NUMERATOR.into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_OWNERS_FEE_DENOMINATOR.into())
+                        .unwrap()
+                        .0.as_u64();
+                    cult_wsol = taxable_amount.checked_sub(platform_tax).unwrap()
+                        .checked_mul(10000u64 - amm.burn_rate).unwrap()
+                        .checked_div(20000u64).unwrap();
+                    swap_amount_out.checked_sub(platform_tax).unwrap().checked_sub(cult_wsol).unwrap()
+                }
+                SwapDirection::PC2Coin => {
+                    // Trying to restore the expected output amount if fees were not applied.
+                    // This is not the exact value, due some non-linearities in the fee calculation,
+                    // but it should be close enough for the purpose of the swap.
+                    let taxable_amount = U128::from(swap_amount_out)
+                        .checked_mul(swap.amount_in.into())
+                        .unwrap()
+                        .checked_mul(amm.fees.swap_fee_numerator.into())
+                        .unwrap()
+                        .checked_mul((COOLPAD_OWNERS_FEE_DENOMINATOR - COOLPAD_OWNERS_FEE_NUMERATOR).into())
+                        .unwrap()
+                        .checked_ceil_div(U128::from(swap_in_after_deduct_fee)
+                                              .checked_mul(amm.fees.swap_fee_denominator.into()).unwrap()
+                                              .checked_mul(COOLPAD_OWNERS_FEE_DENOMINATOR.into()).unwrap())
+                        .unwrap()
+                        .0.as_u64();
+                    burn_token = taxable_amount.checked_mul(amm.burn_rate.into()).unwrap().checked_div(COOLPAD_BURN_RATE_DENOMINATOR.into()).unwrap();
+                    cult_token = taxable_amount.checked_sub(burn_token).unwrap().checked_div(2u64).unwrap();
+                    msg!("Post swap processing: originally got {}, which pre tax would be {}. burn={}", swap_amount_out, taxable_amount, burn_token);
+                    swap_amount_out.checked_sub(burn_token).unwrap().checked_sub(cult_token).unwrap()
+                }
+            }
+        } else {
+            swap_amount_out
+        };
+
         encode_ray_log(SwapBaseInLog {
             log_type: LogType::SwapBaseIn.into_u8(),
             amount_in: swap.amount_in,
@@ -2444,12 +2482,12 @@ impl Processor {
             user_source: user_source.amount,
             pool_coin: total_coin_without_take_pnl,
             pool_pc: total_pc_without_take_pnl,
-            out_amount: swap_amount_out,
+            out_amount: swap_amount_out_to_user,
         });
-        if swap_amount_out < swap.minimum_amount_out {
+        if swap_amount_out_to_user < swap.minimum_amount_out {
             return Err(AmmError::ExceededSlippage.into());
         }
-        if swap_amount_out == 0 || swap.amount_in == 0 {
+        if swap_amount_out_to_user == 0 || swap.amount_in == 0 {
             return Err(AmmError::InvalidInput.into());
         }
 
@@ -2514,13 +2552,41 @@ impl Processor {
                     }
                 }
                 // deposit source coin to amm_coin_vault
+                let mut amount_to_deposit = swap.amount_in;
+                if burn_token > 0 {
+                    Invokers::token_burn(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        coin_mint_info.clone(),
+                        user_source_owner.clone(),
+                        burn_token,
+                    )?;
+                    amount_to_deposit -= burn_token;
+                }
+                if cult_token > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        cult_contribution_token_account.clone(),
+                        user_source_owner.clone(),
+                        cult_token,
+                    )?;
+                    // amm.state_data.need_take_pnl_coin = amm
+                    //     .state_data
+                    //     .need_take_pnl_coin
+                    //     .checked_add(cult_token)
+                    //     .unwrap();
+                    amount_to_deposit -= cult_token;
+                }
+
                 Invokers::token_transfer(
                     token_program_info.clone(),
                     user_source_info.clone(),
                     amm_coin_vault_info.clone(),
                     user_source_owner.clone(),
-                    swap.amount_in,
+                    amount_to_deposit
                 )?;
+
                 // withdraw amm_pc_vault to destination pc
                 Invokers::token_transfer_with_authority(
                     token_program_info.clone(),
@@ -2531,6 +2597,33 @@ impl Processor {
                     amm.nonce as u8,
                     swap_amount_out,
                 )?;
+
+                msg!("Cult contribution: {} WSOL, Platform: {}", cult_wsol, platform_tax);
+                if cult_wsol > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        cult_contribution_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        cult_wsol,
+                    )?;
+                    // Lazy fees path
+                    // amm.state_data.need_take_pnl_pc = amm
+                    //     .state_data
+                    //     .need_take_pnl_pc
+                    //     .checked_add(cult_token)
+                    //     .unwrap();
+                }
+                if platform_tax > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        platform_tax_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        platform_tax,
+                    )?;
+                }
+
                 // update state_data data
                 amm.state_data.swap_coin_in_amount = amm
                     .state_data
@@ -2543,11 +2636,14 @@ impl Processor {
                     .checked_add(swap_amount_out.into())
                     .unwrap();
                 // charge coin as swap fee
+                /*
                 amm.state_data.swap_acc_coin_fee = amm
                     .state_data
                     .swap_acc_coin_fee
                     .checked_add(swap_fee.as_u64())
                     .unwrap();
+                }
+                */
             }
             SwapDirection::PC2Coin => {
                 if swap_amount_out >= total_coin_without_take_pnl {
@@ -2607,14 +2703,44 @@ impl Processor {
                         )?;
                     }
                 }
+                let mut amount_to_deposit = swap.amount_in;
+
+                msg!("swap.amount_in={}. Pre-swap take cult_wsol={} platform_tax={}", swap.amount_in, cult_wsol, platform_tax);
+                
+                if cult_wsol > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        cult_contribution_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        cult_wsol,
+                    )?;
+                    // Lazy fees path
+                    // amm.state_data.need_take_pnl_pc = amm.state_data.need_take_pnl_pc
+                    //     .checked_add(cult_wsol)
+                    //     .unwrap();
+                    amount_to_deposit -= cult_wsol;
+                }
+                if platform_tax > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        platform_tax_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        platform_tax,
+                    )?;
+                    amount_to_deposit -= platform_tax;
+                }
+
                 // deposit source pc to amm_pc_vault
                 Invokers::token_transfer(
                     token_program_info.clone(),
                     user_source_info.clone(),
                     amm_pc_vault_info.clone(),
                     user_source_owner.clone(),
-                    swap.amount_in,
+                    amount_to_deposit,
                 )?;
+
                 // withdraw amm_coin_vault to destination coin
                 Invokers::token_transfer_with_authority(
                     token_program_info.clone(),
@@ -2625,6 +2751,30 @@ impl Processor {
                     amm.nonce as u8,
                     swap_amount_out,
                 )?;
+                if burn_token > 0 {
+                    Invokers::token_burn(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        coin_mint_info.clone(),
+                        user_source_owner.clone(),
+                        burn_token,
+                    )?;
+                }
+                if cult_token > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        cult_contribution_token_account.clone(),
+                        user_source_owner.clone(),
+                        cult_token,
+                    )?;
+                    // amm.state_data.need_take_pnl_coin = amm
+                    //     .state_data
+                    //     .need_take_pnl_coin
+                    //     .checked_add(cult_token)
+                    //     .unwrap();
+                }
+
                 // update state_data data
                 amm.state_data.swap_pc_in_amount = amm
                     .state_data
@@ -2637,11 +2787,13 @@ impl Processor {
                     .checked_add(swap_amount_out.into())
                     .unwrap();
                 // charge pc as swap fee
+                /*
                 amm.state_data.swap_acc_pc_fee = amm
                     .state_data
                     .swap_acc_pc_fee
                     .checked_add(swap_fee.as_u64())
                     .unwrap();
+                */
             }
         };
         amm.recent_epoch = Clock::get()?.epoch;
@@ -2654,7 +2806,8 @@ impl Processor {
         accounts: &[AccountInfo],
         swap: SwapInstructionBaseOut,
     ) -> ProgramResult {
-        const SWAP_ACCOUNT_NUM: usize = 17;
+        msg!("Processing base out ix");
+        const SWAP_ACCOUNT_NUM: usize = 21;
         let input_account_len = accounts.len();
         if input_account_len != SWAP_ACCOUNT_NUM && input_account_len != SWAP_ACCOUNT_NUM + 1 {
             return Err(AmmError::WrongAccountsNumber.into());
@@ -2692,6 +2845,13 @@ impl Processor {
         let user_source_info = next_account_info(account_info_iter)?;
         let user_destination_info = next_account_info(account_info_iter)?;
         let user_source_owner = next_account_info(account_info_iter)?;
+        
+        let coin_mint_info = next_account_info(account_info_iter)?;
+
+        let platform_tax_wsol_account = next_account_info(account_info_iter)?;
+        let cult_contribution_wsol_account = next_account_info(account_info_iter)?;
+        let cult_contribution_token_account = next_account_info(account_info_iter)?;
+
         if !user_source_owner.is_signer {
             return Err(AmmError::InvalidSignAccount.into());
         }
@@ -2731,6 +2891,22 @@ impl Processor {
         {
             return Err(AmmError::InvalidUserToken.into());
         }
+
+        Self::check_admins_token_account(
+            platform_tax_wsol_account,
+            spl_token_program_id,
+            &config_feature::amm_owner::ID,
+        )?;
+        Self::check_admins_token_account(
+            cult_contribution_wsol_account,
+            spl_token_program_id,
+            &config_feature::amm_owner::ID,
+        )?;
+        Self::check_admins_token_account(
+            cult_contribution_token_account,
+            spl_token_program_id,
+            &config_feature::amm_owner::ID,
+        )?;
 
         let amm_coin_vault =
             Self::unpack_token_account(&amm_coin_vault_info, spl_token_program_id)?;
@@ -2868,8 +3044,93 @@ impl Processor {
             return Err(AmmError::InvalidInput.into());
         }
 
+        let (amount_to_burn, cult_contribution_token, platform_tax, cult_contribution_wsol) = if amm.is_coolpad_token {
+            let virtual_amount_out = U128::from(swap.amount_out)
+                .checked_mul(swap_in_after_add_fee.into())
+                .unwrap()
+                .checked_ceil_div(swap_in_before_add_fee.into())
+                .unwrap()
+                .0;
+            let taxable_output = virtual_amount_out
+                .checked_mul(amm.fees.swap_fee_numerator.into())
+                .unwrap()
+                .checked_ceil_div(amm.fees.swap_fee_denominator.into())
+                .unwrap()
+                .0;
+            let taxable_input = U128::from(swap_in_after_add_fee)
+                .checked_mul(amm.fees.swap_fee_numerator.into())
+                .unwrap()
+                .checked_ceil_div(amm.fees.swap_fee_denominator.into())
+                .unwrap()
+                .0;
+            match swap_direction {
+                SwapDirection::Coin2PC => {
+                    // This is SELL. Input = TOKEN, Output = SOL.
+                    let taxable_input = taxable_input
+                        .checked_mul((COOLPAD_OWNERS_FEE_DENOMINATOR - COOLPAD_OWNERS_FEE_NUMERATOR).into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_OWNERS_FEE_DENOMINATOR.into())
+                        .unwrap()
+                        .0;
+                    let burn_amount = taxable_input
+                        .checked_mul(amm.burn_rate.into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_BURN_RATE_DENOMINATOR.into())
+                        .unwrap()
+                        .0;
+                    let cult_contribution_token = taxable_input
+                        .checked_sub(burn_amount)
+                        .unwrap()
+                        .checked_ceil_div(2.into())
+                        .unwrap().0.as_u64();
+                    let platform_tax = taxable_output
+                        .checked_mul(COOLPAD_OWNERS_FEE_NUMERATOR.into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_OWNERS_FEE_DENOMINATOR.into())
+                        .unwrap().0;
+                    let cult_contribution_wsol = taxable_output.checked_sub(platform_tax).unwrap()
+                        .checked_mul((10000u64 - amm.burn_rate).into()).unwrap()
+                        .checked_ceil_div(20000.into()).unwrap().0;
+
+                    (burn_amount.as_u64(), cult_contribution_token, platform_tax.as_u64(), cult_contribution_wsol.as_u64())
+                }
+                SwapDirection::PC2Coin => {
+                    // This is BUY. Input = SOL, Output = TOKEN.
+                    let platform_tax = taxable_input
+                        .checked_mul(COOLPAD_OWNERS_FEE_NUMERATOR.into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_OWNERS_FEE_DENOMINATOR.into())
+                        .unwrap().0;
+                    let cult_contribution_wsol = taxable_input
+                        .checked_sub(platform_tax)
+                        .unwrap()
+                        .checked_mul((10000u64 - amm.burn_rate).into())
+                        .unwrap()
+                        .checked_ceil_div(20000.into())
+                        .unwrap().0;
+                    let taxable_output = taxable_output
+                        .checked_mul((COOLPAD_OWNERS_FEE_DENOMINATOR - COOLPAD_OWNERS_FEE_NUMERATOR).into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_OWNERS_FEE_DENOMINATOR.into())
+                        .unwrap()
+                        .0;
+                    let burn_amount = taxable_output
+                        .checked_mul(amm.burn_rate.into())
+                        .unwrap()
+                        .checked_ceil_div(COOLPAD_BURN_RATE_DENOMINATOR.into()).unwrap().0;
+                    let cult_contribution_token = taxable_output.checked_sub(burn_amount).unwrap()
+                        .checked_ceil_div(2.into()).unwrap().0;
+                    (burn_amount.as_u64(), cult_contribution_token.as_u64(), platform_tax.as_u64(), cult_contribution_wsol.as_u64())
+                }
+            }
+        } else {
+            (0, 0, 0, 0)
+        };
+        msg!("amount_to_burn: {}, cult_contribution_token: {}, platform_tax: {}, cult_contribution_wsol: {}", amount_to_burn, cult_contribution_token, platform_tax, cult_contribution_wsol);
+
         match swap_direction {
             SwapDirection::Coin2PC => {
+                // THIS IS SELL. INPUT = TOKEN, OUTPUT = SOL
                 if swap.amount_out >= total_pc_without_take_pnl {
                     return Err(AmmError::InsufficientFunds.into());
                 }
@@ -2928,13 +3189,43 @@ impl Processor {
                     }
                 }
                 // deposit source coin to amm_coin_vault
+                let mut token_to_deposit = swap_in_after_add_fee;
+                if amount_to_burn > 0 {
+                    Invokers::token_burn(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        coin_mint_info.clone(),
+                        user_source_owner.clone(),
+                        amount_to_burn,
+                    )?;
+                    token_to_deposit = token_to_deposit.checked_sub(amount_to_burn).unwrap();
+                }
+                if cult_contribution_token > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        cult_contribution_token_account.clone(),
+                        user_source_owner.clone(),
+                        cult_contribution_token,
+                    )?;
+                    token_to_deposit = token_to_deposit.checked_sub(cult_contribution_token).unwrap();
+                }
                 Invokers::token_transfer(
                     token_program_info.clone(),
                     user_source_info.clone(),
                     amm_coin_vault_info.clone(),
                     user_source_owner.clone(),
-                    swap_in_after_add_fee,
+                    token_to_deposit,
                 )?;
+                if amount_to_burn > 0 {
+                    Invokers::token_burn(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        coin_mint_info.clone(),
+                        user_source_owner.clone(),
+                        amount_to_burn,
+                    )?;
+                }
                 // withdraw amm_pc_vault to destination pc
                 Invokers::token_transfer_with_authority(
                     token_program_info.clone(),
@@ -2943,8 +3234,27 @@ impl Processor {
                     amm_authority_info.clone(),
                     AUTHORITY_AMM,
                     amm.nonce as u8,
-                    swap.amount_out,
+                    swap.amount_out + platform_tax + cult_contribution_wsol,
                 )?;
+                if cult_contribution_wsol > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        cult_contribution_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        cult_contribution_wsol,
+                    )?;
+                }
+                if platform_tax > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        platform_tax_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        platform_tax,
+                    )?;
+                }
+
                 // update state_data data
                 amm.state_data.swap_coin_in_amount = amm
                     .state_data
@@ -3021,13 +3331,34 @@ impl Processor {
                     }
                 }
 
-                // deposit source pc to amm_pc_vault
+                let mut amount_to_deposit = swap_in_after_add_fee;
+                if platform_tax > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        platform_tax_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        platform_tax,
+                    )?;
+                    amount_to_deposit = amount_to_deposit.checked_sub(platform_tax).unwrap();
+                }
+                if cult_contribution_wsol > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_source_info.clone(),
+                        cult_contribution_wsol_account.clone(),
+                        user_source_owner.clone(),
+                        cult_contribution_wsol,
+                    )?;
+                    amount_to_deposit = amount_to_deposit.checked_sub(cult_contribution_wsol).unwrap();
+                }
+                msg!("swap_in_after_add_fee: {}, amount_to_deposit: {}", swap_in_after_add_fee, amount_to_deposit);
                 Invokers::token_transfer(
                     token_program_info.clone(),
                     user_source_info.clone(),
                     amm_pc_vault_info.clone(),
                     user_source_owner.clone(),
-                    swap_in_after_add_fee,
+                    amount_to_deposit,
                 )?;
                 // withdraw amm_coin_vault to destination coin
                 Invokers::token_transfer_with_authority(
@@ -3037,8 +3368,26 @@ impl Processor {
                     amm_authority_info.clone(),
                     AUTHORITY_AMM,
                     amm.nonce as u8,
-                    swap.amount_out,
+                    swap.amount_out + amount_to_burn + cult_contribution_token,
                 )?;
+                if amount_to_burn > 0 {
+                    Invokers::token_burn(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        coin_mint_info.clone(),
+                        user_source_owner.clone(),
+                        amount_to_burn,
+                    )?;
+                }
+                if cult_contribution_token > 0 {
+                    Invokers::token_transfer(
+                        token_program_info.clone(),
+                        user_destination_info.clone(),
+                        cult_contribution_token_account.clone(),
+                        user_source_owner.clone(),
+                        cult_contribution_token,
+                    )?;
+                }
                 // update state_data data
                 amm.state_data.swap_pc_in_amount = amm
                     .state_data
@@ -3067,6 +3416,7 @@ impl Processor {
         program_id: &Pubkey,
         accounts: &[AccountInfo],
     ) -> ProgramResult {
+        unreachable!();
         let account_info_iter = &mut accounts.iter();
         let token_program_info = next_account_info(account_info_iter)?;
         let system_program_info = next_account_info(account_info_iter)?;
@@ -3297,6 +3647,8 @@ impl Processor {
             pc_decimals,
             new_market_coin_lot_size,
             new_market_pc_lot_size,
+            false,
+            0u16, 0u16
         )?;
         amm.status = AmmStatus::WaitingTrade.into_u64();
         amm.reset_flag = AmmResetFlag::ResetYes.into_u64();
