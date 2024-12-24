@@ -2587,6 +2587,30 @@ impl Processor {
                     amount_to_deposit
                 )?;
 
+                msg!("Cult contribution: {} WSOL, Platform: {}", cult_wsol, platform_tax);
+                if cult_wsol > 0 {
+                    Invokers::token_transfer_with_authority(
+                        token_program_info.clone(),
+                        amm_pc_vault_info.clone(),
+                        cult_contribution_wsol_account.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        cult_wsol,
+                    )?;
+                }
+                if platform_tax > 0 {
+                    Invokers::token_transfer_with_authority(
+                        token_program_info.clone(),
+                        amm_pc_vault_info.clone(),
+                        platform_tax_wsol_account.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        platform_tax,
+                    )?;
+                }
+
                 // withdraw amm_pc_vault to destination pc
                 Invokers::token_transfer_with_authority(
                     token_program_info.clone(),
@@ -2595,34 +2619,8 @@ impl Processor {
                     amm_authority_info.clone(),
                     AUTHORITY_AMM,
                     amm.nonce as u8,
-                    swap_amount_out,
+                    swap_amount_out.checked_sub(cult_wsol).unwrap().checked_sub(platform_tax).unwrap(),
                 )?;
-
-                msg!("Cult contribution: {} WSOL, Platform: {}", cult_wsol, platform_tax);
-                if cult_wsol > 0 {
-                    Invokers::token_transfer(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        cult_contribution_wsol_account.clone(),
-                        user_source_owner.clone(),
-                        cult_wsol,
-                    )?;
-                    // Lazy fees path
-                    // amm.state_data.need_take_pnl_pc = amm
-                    //     .state_data
-                    //     .need_take_pnl_pc
-                    //     .checked_add(cult_token)
-                    //     .unwrap();
-                }
-                if platform_tax > 0 {
-                    Invokers::token_transfer(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        platform_tax_wsol_account.clone(),
-                        user_source_owner.clone(),
-                        platform_tax,
-                    )?;
-                }
 
                 // update state_data data
                 amm.state_data.swap_coin_in_amount = amm
@@ -2741,6 +2739,29 @@ impl Processor {
                     amount_to_deposit,
                 )?;
 
+                if burn_token > 0 {
+                    Invokers::token_burn_with_authority(
+                        token_program_info.clone(),
+                        amm_coin_vault_info.clone(),
+                        coin_mint_info.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        burn_token,
+                    )?;
+                }
+                if cult_token > 0 {
+                    Invokers::token_transfer_with_authority(
+                        token_program_info.clone(),
+                        amm_coin_vault_info.clone(),
+                        cult_contribution_token_account.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        cult_token,
+                    )?;
+                }
+
                 // withdraw amm_coin_vault to destination coin
                 Invokers::token_transfer_with_authority(
                     token_program_info.clone(),
@@ -2749,31 +2770,8 @@ impl Processor {
                     amm_authority_info.clone(),
                     AUTHORITY_AMM,
                     amm.nonce as u8,
-                    swap_amount_out,
+                    swap_amount_out.checked_sub(burn_token).unwrap().checked_sub(cult_token).unwrap(),
                 )?;
-                if burn_token > 0 {
-                    Invokers::token_burn(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        coin_mint_info.clone(),
-                        user_source_owner.clone(),
-                        burn_token,
-                    )?;
-                }
-                if cult_token > 0 {
-                    Invokers::token_transfer(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        cult_contribution_token_account.clone(),
-                        user_source_owner.clone(),
-                        cult_token,
-                    )?;
-                    // amm.state_data.need_take_pnl_coin = amm
-                    //     .state_data
-                    //     .need_take_pnl_coin
-                    //     .checked_add(cult_token)
-                    //     .unwrap();
-                }
 
                 // update state_data data
                 amm.state_data.swap_pc_in_amount = amm
@@ -3226,6 +3224,28 @@ impl Processor {
                         amount_to_burn,
                     )?;
                 }
+                if cult_contribution_wsol > 0 {
+                    Invokers::token_transfer_with_authority(
+                        token_program_info.clone(),
+                        amm_pc_vault_info.clone(),
+                        cult_contribution_wsol_account.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        cult_contribution_wsol,
+                    )?;
+                }
+                if platform_tax > 0 {
+                    Invokers::token_transfer_with_authority(
+                        token_program_info.clone(),
+                        amm_pc_vault_info.clone(),
+                        platform_tax_wsol_account.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        platform_tax,
+                    )?;
+                }
                 // withdraw amm_pc_vault to destination pc
                 Invokers::token_transfer_with_authority(
                     token_program_info.clone(),
@@ -3234,26 +3254,8 @@ impl Processor {
                     amm_authority_info.clone(),
                     AUTHORITY_AMM,
                     amm.nonce as u8,
-                    swap.amount_out + platform_tax + cult_contribution_wsol,
+                    swap.amount_out,
                 )?;
-                if cult_contribution_wsol > 0 {
-                    Invokers::token_transfer(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        cult_contribution_wsol_account.clone(),
-                        user_source_owner.clone(),
-                        cult_contribution_wsol,
-                    )?;
-                }
-                if platform_tax > 0 {
-                    Invokers::token_transfer(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        platform_tax_wsol_account.clone(),
-                        user_source_owner.clone(),
-                        platform_tax,
-                    )?;
-                }
 
                 // update state_data data
                 amm.state_data.swap_coin_in_amount = amm
@@ -3360,6 +3362,28 @@ impl Processor {
                     user_source_owner.clone(),
                     amount_to_deposit,
                 )?;
+                if amount_to_burn > 0 {
+                    Invokers::token_burn_with_authority(
+                        token_program_info.clone(),
+                        amm_coin_vault_info.clone(),
+                        coin_mint_info.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        amount_to_burn,
+                    )?;
+                }
+                if cult_contribution_token > 0 {
+                    Invokers::token_transfer_with_authority(
+                        token_program_info.clone(),
+                        amm_coin_vault_info.clone(),
+                        cult_contribution_token_account.clone(),
+                        amm_authority_info.clone(),
+                        AUTHORITY_AMM,
+                        amm.nonce as u8,
+                        cult_contribution_token,
+                    )?;
+                }
                 // withdraw amm_coin_vault to destination coin
                 Invokers::token_transfer_with_authority(
                     token_program_info.clone(),
@@ -3368,26 +3392,8 @@ impl Processor {
                     amm_authority_info.clone(),
                     AUTHORITY_AMM,
                     amm.nonce as u8,
-                    swap.amount_out + amount_to_burn + cult_contribution_token,
+                    swap.amount_out,
                 )?;
-                if amount_to_burn > 0 {
-                    Invokers::token_burn(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        coin_mint_info.clone(),
-                        user_source_owner.clone(),
-                        amount_to_burn,
-                    )?;
-                }
-                if cult_contribution_token > 0 {
-                    Invokers::token_transfer(
-                        token_program_info.clone(),
-                        user_destination_info.clone(),
-                        cult_contribution_token_account.clone(),
-                        user_source_owner.clone(),
-                        cult_contribution_token,
-                    )?;
-                }
                 // update state_data data
                 amm.state_data.swap_pc_in_amount = amm
                     .state_data
