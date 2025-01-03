@@ -3215,15 +3215,6 @@ impl Processor {
                     user_source_owner.clone(),
                     token_to_deposit,
                 )?;
-                if amount_to_burn > 0 {
-                    Invokers::token_burn(
-                        token_program_info.clone(),
-                        user_source_info.clone(),
-                        coin_mint_info.clone(),
-                        user_source_owner.clone(),
-                        amount_to_burn,
-                    )?;
-                }
                 if cult_contribution_wsol > 0 {
                     Invokers::token_transfer_with_authority(
                         token_program_info.clone(),
