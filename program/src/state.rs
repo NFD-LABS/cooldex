@@ -479,6 +479,11 @@ pub struct Fees {
     pub swap_fee_numerator: u64,
     /// denominator of the swap_fee
     pub swap_fee_denominator: u64,
+
+    /// cooldex team fee wsol fee numerator
+    pub cooldex_team_fee_wsol_fee_numerator: u64,
+    /// cooldex team fee wsol fee denominator
+    pub cooldex_team_fee_wsol_fee_denominator: u64,
 }
 
 impl Fees {
@@ -504,6 +509,9 @@ impl Fees {
         // swap_fee = 25 / 10000
         self.swap_fee_numerator = 25;
         self.swap_fee_denominator = TEN_THOUSAND;
+
+        self.cooldex_team_fee_wsol_fee_numerator = 500; // 5%
+        self.cooldex_team_fee_wsol_fee_denominator = TEN_THOUSAND;
         Ok(())
     }
 }
@@ -519,7 +527,7 @@ impl Sealed for Fees {}
 impl Pack for Fees {
     const LEN: usize = 64;
     fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 64];
+        let output = array_mut_ref![output, 0, 80];
         let (
             min_separate_numerator,
             min_separate_denominator,
@@ -529,7 +537,9 @@ impl Pack for Fees {
             pnl_denominator,
             swap_fee_numerator,
             swap_fee_denominator,
-        ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8];
+            cooldex_team_fee_wsol_fee_numerator,
+            cooldex_team_fee_wsol_fee_denominator,
+        ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8];
         *min_separate_numerator = self.min_separate_numerator.to_le_bytes();
         *min_separate_denominator = self.min_separate_denominator.to_le_bytes();
         *trade_fee_numerator = self.trade_fee_numerator.to_le_bytes();
@@ -538,10 +548,12 @@ impl Pack for Fees {
         *pnl_denominator = self.pnl_denominator.to_le_bytes();
         *swap_fee_numerator = self.swap_fee_numerator.to_le_bytes();
         *swap_fee_denominator = self.swap_fee_denominator.to_le_bytes();
+        *cooldex_team_fee_wsol_fee_numerator = self.cooldex_team_fee_wsol_fee_numerator.to_le_bytes();
+        *cooldex_team_fee_wsol_fee_denominator = self.cooldex_team_fee_wsol_fee_denominator.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Fees, ProgramError> {
-        let input = array_ref![input, 0, 64];
+        let input = array_ref![input, 0, 80];
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             min_separate_numerator,
@@ -552,7 +564,9 @@ impl Pack for Fees {
             pnl_denominator,
             swap_fee_numerator,
             swap_fee_denominator,
-        ) = array_refs![input, 8, 8, 8, 8, 8, 8, 8, 8];
+            cooldex_team_fee_wsol_fee_numerator,
+            cooldex_team_fee_wsol_fee_denominator,
+        ) = array_refs![input, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8];
         Ok(Self {
             min_separate_numerator: u64::from_le_bytes(*min_separate_numerator),
             min_separate_denominator: u64::from_le_bytes(*min_separate_denominator),
@@ -562,6 +576,8 @@ impl Pack for Fees {
             pnl_denominator: u64::from_le_bytes(*pnl_denominator),
             swap_fee_numerator: u64::from_le_bytes(*swap_fee_numerator),
             swap_fee_denominator: u64::from_le_bytes(*swap_fee_denominator),
+            cooldex_team_fee_wsol_fee_numerator: u64::from_le_bytes(*cooldex_team_fee_wsol_fee_numerator),
+            cooldex_team_fee_wsol_fee_denominator: u64::from_le_bytes(*cooldex_team_fee_wsol_fee_denominator),
         })
     }
 }

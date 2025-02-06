@@ -386,16 +386,21 @@ impl AmmInstruction {
                 let (open_time, _reset) = Self::unpack_u64(rest)?;
                 Self::Initialize(InitializeInstruction { nonce, open_time })
             }
-            1 => {
+            1 | 16 => {
                 let (nonce, rest) = Self::unpack_u8(rest)?;
                 let (open_time, rest) = Self::unpack_u64(rest)?;
                 let (init_pc_amount, rest) = Self::unpack_u64(rest)?;
                 let (init_coin_amount, rest) = Self::unpack_u64(rest)?;
-                let (fee_numerator, rest) = Self::unpack_u16(rest)?;
-                let (burn_bp, _rest) = Self::unpack_u16(rest)?;
-                if burn_bp > 10000 {
-                    return Err(ProgramError::InvalidInstructionData.into());
-                }
+                let (fee_numerator, burn_bp, _rest) = if tag == 1 {
+                    (0u16, 0u16, rest)
+                } else {
+                    let (fee_numerator, rest) = Self::unpack_u16(rest)?;
+                    let (burn_bp, rest) = Self::unpack_u16(rest)?;
+                    if burn_bp > 10000 {
+                        return Err(ProgramError::InvalidInstructionData.into());
+                    }
+                    (fee_numerator, burn_bp, rest)
+                };
                 Self::Initialize2(InitializeInstruction2 {
                     nonce,
                     open_time,

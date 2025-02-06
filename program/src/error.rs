@@ -211,6 +211,9 @@ pub enum AmmError {
     /// Unknown Amm Error
     #[error("Unknown Amm Error")]
     UnknownAmmError,
+    /// Only Coolpad Deployer Is Allowed
+    #[error("Only Coolpad Deployer Is Allowed")]
+    OnlyCoolpadIsAllowed,
 }
 
 impl From<AmmError> for ProgramError {
@@ -304,6 +307,7 @@ impl PrintProgramError for AmmError {
             AmmError::MarketLotSizeIsTooLarge => msg!("Error: Market lotSize is too large"),
             AmmError::InitLpAmountTooLess => msg!("Error: Init lp amount is too less(Because 10**lp_decimals amount lp will be locked)"),
             AmmError::UnknownAmmError => msg!("Error: UnknownAmmError"),
+            AmmError::OnlyCoolpadIsAllowed => msg!("Error: OnlyCoolpadIsAllowed"),
         }
     }
 }
