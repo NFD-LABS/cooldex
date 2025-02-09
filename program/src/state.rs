@@ -493,6 +493,7 @@ impl Fees {
         validate_fraction(self.trade_fee_numerator, self.trade_fee_denominator)?;
         validate_fraction(self.pnl_numerator, self.pnl_denominator)?;
         validate_fraction(self.swap_fee_numerator, self.swap_fee_denominator)?;
+        validate_fraction(self.cooldex_team_fee_wsol_fee_numerator, self.cooldex_team_fee_wsol_fee_denominator)?;
         Ok(())
     }
 
@@ -525,7 +526,7 @@ impl IsInitialized for Fees {
 
 impl Sealed for Fees {}
 impl Pack for Fees {
-    const LEN: usize = 64;
+    const LEN: usize = 80;
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, 80];
         let (
