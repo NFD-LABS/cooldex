@@ -2016,9 +2016,9 @@ impl Processor {
         accounts: &[AccountInfo],
         swap: SwapInstructionBaseIn,
     ) -> ProgramResult {
-        const ACCOUNT_LEN: usize = 21;
+        const ACCOUNT_LEN: usize = 12;
         let input_account_len = accounts.len();
-        if input_account_len != ACCOUNT_LEN && input_account_len != ACCOUNT_LEN + 1 {
+        if input_account_len != ACCOUNT_LEN {
             return Err(AmmError::WrongAccountsNumber.into());
         }
         let account_info_iter = &mut accounts.iter();
@@ -2026,24 +2026,10 @@ impl Processor {
 
         let amm_info = next_account_info(account_info_iter)?;
         let amm_authority_info = next_account_info(account_info_iter)?;
-        let amm_open_orders_info = next_account_info(account_info_iter)?;
-        if input_account_len == ACCOUNT_LEN + 1 {
-            let _amm_target_orders_info = next_account_info(account_info_iter)?;
-        }
         let amm_coin_vault_info = next_account_info(account_info_iter)?;
         let amm_pc_vault_info = next_account_info(account_info_iter)?;
 
-        let market_program_info = next_account_info(account_info_iter)?;
-
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
-        let market_info = next_account_info(account_info_iter)?;
-        let market_bids_info = next_account_info(account_info_iter)?;
-        let market_asks_info = next_account_info(account_info_iter)?;
-        let market_event_queue_info = next_account_info(account_info_iter)?;
-        let market_coin_vault_info = next_account_info(account_info_iter)?;
-        let market_pc_vault_info = next_account_info(account_info_iter)?;
-        let market_vault_signer = next_account_info(account_info_iter)?;
-
         let user_source_info = next_account_info(account_info_iter)?;
         let user_destination_info = next_account_info(account_info_iter)?;
         let user_source_owner = next_account_info(account_info_iter)?;
@@ -2515,9 +2501,9 @@ impl Processor {
         swap: SwapInstructionBaseOut,
     ) -> ProgramResult {
         msg!("Processing base out ix");
-        const SWAP_ACCOUNT_NUM: usize = 21;
+        const SWAP_ACCOUNT_NUM: usize = 12;
         let input_account_len = accounts.len();
-        if input_account_len != SWAP_ACCOUNT_NUM && input_account_len != SWAP_ACCOUNT_NUM + 1 {
+        if input_account_len != SWAP_ACCOUNT_NUM {
             return Err(AmmError::WrongAccountsNumber.into());
         }
         let account_info_iter = &mut accounts.iter();
@@ -2525,23 +2511,10 @@ impl Processor {
 
         let amm_info = next_account_info(account_info_iter)?;
         let amm_authority_info = next_account_info(account_info_iter)?;
-        let amm_open_orders_info = next_account_info(account_info_iter)?;
-        if input_account_len == SWAP_ACCOUNT_NUM + 1 {
-            let _amm_target_orders_info = next_account_info(account_info_iter)?;
-        }
         let amm_coin_vault_info = next_account_info(account_info_iter)?;
         let amm_pc_vault_info = next_account_info(account_info_iter)?;
 
-        let market_program_info = next_account_info(account_info_iter)?;
-
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
-        let market_info = next_account_info(account_info_iter)?;
-        let market_bids_info = next_account_info(account_info_iter)?;
-        let market_asks_info = next_account_info(account_info_iter)?;
-        let market_event_queue_info = next_account_info(account_info_iter)?;
-        let market_coin_vault_info = next_account_info(account_info_iter)?;
-        let market_pc_vault_info = next_account_info(account_info_iter)?;
-        let market_vault_signer = next_account_info(account_info_iter)?;
 
         let user_source_info = next_account_info(account_info_iter)?;
         let user_destination_info = next_account_info(account_info_iter)?;
