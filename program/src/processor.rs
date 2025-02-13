@@ -1224,7 +1224,7 @@ impl Processor {
         accounts: &[AccountInfo],
         deposit: DepositInstruction,
     ) -> ProgramResult {
-        const ACCOUNT_LEN: usize = 14;
+        const ACCOUNT_LEN: usize = 10;
         let input_account_len = accounts.len();
         if input_account_len != ACCOUNT_LEN && input_account_len != ACCOUNT_LEN + 1 {
             return Err(AmmError::WrongAccountsNumber.into());
@@ -1234,19 +1234,14 @@ impl Processor {
 
         let amm_info = next_account_info(account_info_iter)?;
         let amm_authority_info = next_account_info(account_info_iter)?;
-        let amm_open_orders_info = next_account_info(account_info_iter)?;
-        let amm_target_orders_info = next_account_info(account_info_iter)?;
         let amm_lp_mint_info = next_account_info(account_info_iter)?;
         let amm_coin_vault_info = next_account_info(account_info_iter)?;
         let amm_pc_vault_info = next_account_info(account_info_iter)?;
-
-        let market_info = next_account_info(account_info_iter)?;
 
         let user_source_coin_info = next_account_info(account_info_iter)?;
         let user_source_pc_info = next_account_info(account_info_iter)?;
         let user_dest_lp_info = next_account_info(account_info_iter)?;
         let source_owner_info = next_account_info(account_info_iter)?;
-        let market_event_queue_info = next_account_info(account_info_iter)?;
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
         if deposit.max_coin_amount == 0 || deposit.max_pc_amount == 0 {
             encode_ray_log(DepositLog {
@@ -1301,12 +1296,6 @@ impl Processor {
             "lp_mint",
             AmmError::InvalidPoolMint
         );
-        check_assert_eq!(
-            *amm_target_orders_info.key,
-            amm.target_orders,
-            "target_orders",
-            AmmError::InvalidTargetOrders
-        );
         let amm_coin_vault =
             Self::unpack_token_account(&amm_coin_vault_info, spl_token_program_id)?;
         let amm_pc_vault = Self::unpack_token_account(&amm_pc_vault_info, spl_token_program_id)?;
@@ -1314,8 +1303,6 @@ impl Processor {
             Self::unpack_token_account(&user_source_coin_info, spl_token_program_id)?;
         let user_source_pc =
             Self::unpack_token_account(&user_source_pc_info, spl_token_program_id)?;
-        let mut target_orders =
-            TargetOrders::load_mut_checked(&amm_target_orders_info, program_id, amm_info.key)?;
         // calc the remaining total_pc & total_coin
         let (mut total_pc_without_take_pnl, mut total_coin_without_take_pnl) = Calculator::calc_total_without_take_pnl_no_orderbook(
             amm_pc_vault.amount,
@@ -1334,14 +1321,6 @@ impl Processor {
             amm.sys_decimal_value,
         );
         // calc and update pnl
-        let (delta_x, delta_y) = Self::calc_take_pnl(
-            &target_orders,
-            &mut amm,
-            &mut total_pc_without_take_pnl,
-            &mut total_coin_without_take_pnl,
-            x1.as_u128().into(),
-            y1.as_u128().into(),
-        )?;
         let invariant = InvariantToken {
             token_coin: total_coin_without_take_pnl,
             token_pc: total_pc_without_take_pnl,
@@ -1357,8 +1336,8 @@ impl Processor {
                 pool_coin: total_coin_without_take_pnl,
                 pool_pc: total_pc_without_take_pnl,
                 pool_lp: amm.lp_amount,
-                calc_pnl_x: target_orders.calc_pnl_x,
-                calc_pnl_y: target_orders.calc_pnl_y,
+                calc_pnl_x: 0,
+                calc_pnl_y: 0,
                 deduct_coin: 0,
                 deduct_pc: 0,
                 mint_lp: 0,
@@ -1383,8 +1362,8 @@ impl Processor {
                     pool_coin: total_coin_without_take_pnl,
                     pool_pc: total_pc_without_take_pnl,
                     pool_lp: amm.lp_amount,
-                    calc_pnl_x: target_orders.calc_pnl_x,
-                    calc_pnl_y: target_orders.calc_pnl_y,
+                    calc_pnl_x: 0,
+                    calc_pnl_y: 0,
                     deduct_coin: deduct_coin_amount,
                     deduct_pc: deduct_pc_amount,
                     mint_lp: 0,
@@ -1402,8 +1381,8 @@ impl Processor {
                         pool_coin: total_coin_without_take_pnl,
                         pool_pc: total_pc_without_take_pnl,
                         pool_lp: amm.lp_amount,
-                        calc_pnl_x: target_orders.calc_pnl_x,
-                        calc_pnl_y: target_orders.calc_pnl_y,
+                        calc_pnl_x: 0,
+                        calc_pnl_y: 0,
                         deduct_coin: deduct_coin_amount,
                         deduct_pc: deduct_pc_amount,
                         mint_lp: 0,
@@ -1434,8 +1413,8 @@ impl Processor {
                     pool_coin: total_coin_without_take_pnl,
                     pool_pc: total_pc_without_take_pnl,
                     pool_lp: amm.lp_amount,
-                    calc_pnl_x: target_orders.calc_pnl_x,
-                    calc_pnl_y: target_orders.calc_pnl_y,
+                    calc_pnl_x: 0,
+                    calc_pnl_y: 0,
                     deduct_coin: deduct_coin_amount,
                     deduct_pc: deduct_pc_amount,
                     mint_lp: 0,
@@ -1453,8 +1432,8 @@ impl Processor {
                         pool_coin: total_coin_without_take_pnl,
                         pool_pc: total_pc_without_take_pnl,
                         pool_lp: amm.lp_amount,
-                        calc_pnl_x: target_orders.calc_pnl_x,
-                        calc_pnl_y: target_orders.calc_pnl_y,
+                        calc_pnl_x: 0,
+                        calc_pnl_y: 0,
                         deduct_coin: deduct_coin_amount,
                         deduct_pc: deduct_pc_amount,
                         mint_lp: 0,
@@ -1480,8 +1459,8 @@ impl Processor {
             pool_coin: total_coin_without_take_pnl,
             pool_pc: total_pc_without_take_pnl,
             pool_lp: amm.lp_amount,
-            calc_pnl_x: target_orders.calc_pnl_x,
-            calc_pnl_y: target_orders.calc_pnl_y,
+            calc_pnl_x: 0,
+            calc_pnl_y: 0,
             deduct_coin: deduct_coin_amount,
             deduct_pc: deduct_pc_amount,
             mint_lp: mint_lp_amount,
@@ -1519,27 +1498,6 @@ impl Processor {
             mint_lp_amount,
         )?;
         amm.lp_amount = amm.lp_amount.checked_add(mint_lp_amount).unwrap();
-
-        target_orders.calc_pnl_x = x1
-            .checked_add(Calculator::normalize_decimal_v2(
-                deduct_pc_amount,
-                amm.pc_decimals,
-                amm.sys_decimal_value,
-            ))
-            .unwrap()
-            .checked_sub(U128::from(delta_x))
-            .unwrap()
-            .as_u128();
-        target_orders.calc_pnl_y = y1
-            .checked_add(Calculator::normalize_decimal_v2(
-                deduct_coin_amount,
-                amm.coin_decimals,
-                amm.sys_decimal_value,
-            ))
-            .unwrap()
-            .checked_sub(U128::from(delta_y))
-            .unwrap()
-            .as_u128();
         amm.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
@@ -1766,12 +1724,9 @@ impl Processor {
         accounts: &[AccountInfo],
         withdraw: WithdrawInstruction,
     ) -> ProgramResult {
-        const ACCOUNT_LEN: usize = 20;
+        const ACCOUNT_LEN: usize = 10;
         let input_account_len = accounts.len();
         if input_account_len != ACCOUNT_LEN
-            && input_account_len != ACCOUNT_LEN + 1
-            && input_account_len != ACCOUNT_LEN + 2
-            && input_account_len != ACCOUNT_LEN + 3
         {
             return Err(AmmError::WrongAccountsNumber.into());
         }
@@ -1780,47 +1735,16 @@ impl Processor {
 
         let amm_info = next_account_info(account_info_iter)?;
         let amm_authority_info = next_account_info(account_info_iter)?;
-        let amm_open_orders_info = next_account_info(account_info_iter)?;
-        let amm_target_orders_info = next_account_info(account_info_iter)?;
         let amm_lp_mint_info = next_account_info(account_info_iter)?;
         let amm_coin_vault_info = next_account_info(account_info_iter)?;
         let amm_pc_vault_info = next_account_info(account_info_iter)?;
-        if input_account_len == ACCOUNT_LEN + 2 || input_account_len == ACCOUNT_LEN + 3 {
-            let _padding_account_info1 = next_account_info(account_info_iter)?;
-            let _padding_account_info2 = next_account_info(account_info_iter)?;
-        }
-
-        let market_program_info = next_account_info(account_info_iter)?;
-        let market_info = next_account_info(account_info_iter)?;
-        let market_coin_vault_info = next_account_info(account_info_iter)?;
-        let market_pc_vault_info = next_account_info(account_info_iter)?;
-        let market_vault_signer = next_account_info(account_info_iter)?;
-
+        
         let user_source_lp_info = next_account_info(account_info_iter)?;
         let user_dest_coin_info = next_account_info(account_info_iter)?;
         let user_dest_pc_info = next_account_info(account_info_iter)?;
         let source_lp_owner_info = next_account_info(account_info_iter)?;
 
-        let market_event_q_info = next_account_info(account_info_iter)?;
-        let market_bids_info = next_account_info(account_info_iter)?;
-        let market_asks_info = next_account_info(account_info_iter)?;
-
         let mut referrer_pc_wallet = None;
-        if input_account_len == ACCOUNT_LEN + 1 || input_account_len == ACCOUNT_LEN + 3 {
-            referrer_pc_wallet = Some(next_account_info(account_info_iter)?);
-            if *referrer_pc_wallet.unwrap().key != Pubkey::default() {
-                let referrer_pc_token = Self::unpack_token_account(
-                    &referrer_pc_wallet.unwrap(),
-                    token_program_info.key,
-                )?;
-                check_assert_eq!(
-                    referrer_pc_token.owner,
-                    config_feature::referrer_pc_wallet::id(),
-                    "referrer_pc_owner",
-                    AmmError::InvalidOwner
-                );
-            }
-        }
 
         if referrer_pc_wallet.is_none() {
             referrer_pc_wallet = Some(amm_pc_vault_info);
@@ -1829,9 +1753,6 @@ impl Processor {
             return Err(AmmError::InvalidSignAccount.into());
         }
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
-        let mut target_orders =
-            TargetOrders::load_mut_checked(&amm_target_orders_info, program_id, amm_info.key)?;
-
         if !AmmStatus::from_u64(amm.status).withdraw_permission() {
             return Err(AmmError::InvalidStatus.into());
         }
@@ -1856,12 +1777,6 @@ impl Processor {
         if *amm_pc_vault_info.key != amm.pc_vault || *user_dest_pc_info.key == amm.pc_vault {
             return Err(AmmError::InvalidPCVault.into());
         }
-        check_assert_eq!(
-            *amm_target_orders_info.key,
-            amm.target_orders,
-            "target_orders",
-            AmmError::InvalidTargetOrders
-        );
         check_assert_eq!(
             *amm_lp_mint_info.key,
             amm.lp_mint,
@@ -1908,16 +1823,6 @@ impl Processor {
         // calc and update pnl
         let mut delta_x: u128 = 0;
         let mut delta_y: u128 = 0;
-        if amm.status != AmmStatus::WithdrawOnly.into_u64() {
-            (delta_x, delta_y) = Self::calc_take_pnl(
-                &target_orders,
-                &mut amm,
-                &mut total_pc_without_take_pnl,
-                &mut total_coin_without_take_pnl,
-                x1.as_u128().into(),
-                y1.as_u128().into(),
-            )?;
-        }
 
         // coin_amount / total_coin_amount = amount / lp_mint.supply => coin_amount = total_coin_amount * amount / pool_mint.supply
         let invariant = InvariantPool {
@@ -1938,8 +1843,8 @@ impl Processor {
             pool_coin: total_coin_without_take_pnl,
             pool_pc: total_pc_without_take_pnl,
             pool_lp: amm.lp_amount,
-            calc_pnl_x: target_orders.calc_pnl_x,
-            calc_pnl_y: target_orders.calc_pnl_y,
+            calc_pnl_x: 0,
+            calc_pnl_y: 0,
             out_coin: coin_amount,
             out_pc: pc_amount,
         });
@@ -1986,27 +1891,6 @@ impl Processor {
             return Err(AmmError::TakePnlError.into());
         }
 
-        // step4: update target_orders.calc_pnl_x & target_orders.calc_pnl_y
-        target_orders.calc_pnl_x = x1
-            .checked_sub(Calculator::normalize_decimal_v2(
-                pc_amount,
-                amm.pc_decimals,
-                amm.sys_decimal_value,
-            ))
-            .unwrap()
-            .checked_sub(U128::from(delta_x))
-            .unwrap()
-            .as_u128();
-        target_orders.calc_pnl_y = y1
-            .checked_sub(Calculator::normalize_decimal_v2(
-                coin_amount,
-                amm.coin_decimals,
-                amm.sys_decimal_value,
-            ))
-            .unwrap()
-            .checked_sub(U128::from(delta_y))
-            .unwrap()
-            .as_u128();
         amm.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
