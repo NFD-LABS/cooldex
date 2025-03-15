@@ -841,17 +841,17 @@ impl Processor {
         let rent_sysvar_info = next_account_info(account_info_iter)?;
         let amm_info = next_account_info(account_info_iter)?;
         let amm_authority_info = next_account_info(account_info_iter)?;
-        let amm_open_orders_info = next_account_info(account_info_iter)?;
+        // let amm_open_orders_info = next_account_info(account_info_iter)?;
         let amm_lp_mint_info = next_account_info(account_info_iter)?;
         let amm_coin_mint_info = next_account_info(account_info_iter)?;
         let amm_pc_mint_info = next_account_info(account_info_iter)?;
         let amm_coin_vault_info = next_account_info(account_info_iter)?;
         let amm_pc_vault_info = next_account_info(account_info_iter)?;
-        let amm_target_orders_info = next_account_info(account_info_iter)?;
+        // let amm_target_orders_info = next_account_info(account_info_iter)?;
         let amm_config_info = next_account_info(account_info_iter)?;
         let create_fee_destination_info = next_account_info(account_info_iter)?;
 
-        let market_program_info = next_account_info(account_info_iter)?;
+        // let market_program_info = next_account_info(account_info_iter)?;
         let market_info = next_account_info(account_info_iter)?;
 
         let user_wallet_info = next_account_info(account_info_iter)?;
@@ -885,12 +885,12 @@ impl Processor {
             "spl_associated_token_account",
             AmmError::InvalidSplTokenProgram
         );
-        check_assert_eq!(
-            *market_program_info.key,
-            config_feature::openbook_program::id(),
-            "market_program",
-            AmmError::InvalidMarketProgram
-        );
+        // check_assert_eq!(
+        //     *market_program_info.key,
+        //     config_feature::openbook_program::id(),
+        //     "market_program",
+        //     AmmError::InvalidMarketProgram
+        // );
         check_assert_eq!(
             *system_program_info.key,
             solana_program::system_program::id(),
@@ -945,17 +945,17 @@ impl Processor {
         }
 
         // create target_order account
-        Self::generate_amm_associated_account(
-            program_id,
-            program_id,
-            market_info,
-            amm_target_orders_info,
-            user_wallet_info,
-            system_program_info,
-            rent_sysvar_info,
-            TARGET_ASSOCIATED_SEED,
-            size_of::<TargetOrders>(),
-        )?;
+        // Self::generate_amm_associated_account(
+        //     program_id,
+        //     program_id,
+        //     market_info,
+        //     amm_target_orders_info,
+        //     user_wallet_info,
+        //     system_program_info,
+        //     rent_sysvar_info,
+        //     TARGET_ASSOCIATED_SEED,
+        //     size_of::<TargetOrders>(),
+        // )?;
 
         // create lp mint account
         let lp_decimals = coin_mint.decimals;
@@ -1013,6 +1013,7 @@ impl Processor {
             size_of::<AmmInfo>(),
         )?;
 
+        /*
         // create amm open order account
         Self::generate_amm_associated_account(
             program_id,
@@ -1026,7 +1027,6 @@ impl Processor {
             size_of::<serum_dex::state::OpenOrders>() + 12,
         )?;
         // init open orders account
-        /*
         Invokers::invoke_dex_init_open_orders(
             market_program_info.clone(),
             amm_open_orders_info.clone(),
@@ -1190,21 +1190,21 @@ impl Processor {
             amm.sys_decimal_value,
         );
         // check and init target orders account
-        if amm_target_orders_info.owner != program_id {
-            return Err(AmmError::InvalidProgramAddress.into());
-        }
-        let mut target_order = TargetOrders::load_mut(amm_target_orders_info)?;
-        target_order.check_init(x.as_u128(), y.as_u128(), amm_info.key)?;
+        // if amm_target_orders_info.owner != program_id {
+        //     return Err(AmmError::InvalidProgramAddress.into());
+        // }
+        // let mut target_order = TargetOrders::load_mut(amm_target_orders_info)?;
+        // target_order.check_init(x.as_u128(), y.as_u128(), amm_info.key)?;
 
         amm.coin_vault = *amm_coin_vault_info.key;
         amm.pc_vault = *amm_pc_vault_info.key;
         amm.coin_vault_mint = *amm_coin_mint_info.key;
         amm.pc_vault_mint = *amm_pc_mint_info.key;
         amm.lp_mint = *amm_lp_mint_info.key;
-        amm.open_orders = *amm_open_orders_info.key;
+        // amm.open_orders = *amm_open_orders_info.key;
         amm.market = *market_info.key;
-        amm.market_program = *market_program_info.key;
-        amm.target_orders = *amm_target_orders_info.key;
+        // amm.market_program = *market_program_info.key;
+        // amm.target_orders = *amm_target_orders_info.key;
         amm.amm_owner = config_feature::amm_owner::ID;
         amm.lp_amount = liquidity;
         amm.status = if init.open_time > (Clock::get()?.unix_timestamp as u64) {
